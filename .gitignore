@@ -13,3 +13,8 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Keystore and sensitive files
+keystore/
+*.jks
+*.pem
