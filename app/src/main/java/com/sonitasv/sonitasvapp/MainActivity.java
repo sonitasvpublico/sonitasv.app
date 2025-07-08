@@ -8,6 +8,16 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.view.View;
 import android.widget.ProgressBar;
+import android.webkit.ValueCallback;
+import android.webkit.WebChromeClient;
+import android.provider.MediaStore;
+import android.os.Build;
+import androidx.annotation.Nullable;
+import android.webkit.DownloadListener;
+import android.app.DownloadManager;
+import android.content.Context;
+import android.os.Environment;
+import android.webkit.URLUtil;
 
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -15,6 +25,8 @@ public class MainActivity extends AppCompatActivity {
 
     WebView myWeb;
     ProgressBar progressBar;
+    private ValueCallback<Uri[]> filePathCallback;
+    private static final int FILE_CHOOSER_REQUEST_CODE = 1001;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -63,6 +75,41 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        myWeb.setWebChromeClient(new WebChromeClient() {
+            // For Android 5.0+
+            @Override
+            public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
+                if (MainActivity.this.filePathCallback != null) {
+                    MainActivity.this.filePathCallback.onReceiveValue(null);
+                }
+                MainActivity.this.filePathCallback = filePathCallback;
+                Intent intent = fileChooserParams.createIntent();
+                try {
+                    startActivityForResult(intent, FILE_CHOOSER_REQUEST_CODE);
+                } catch (Exception e) {
+                    MainActivity.this.filePathCallback = null;
+                    return false;
+                }
+                return true;
+            }
+        });
+
+        myWeb.setDownloadListener(new DownloadListener() {
+            @Override
+            public void onDownloadStart(String url, String userAgent, String contentDisposition, String mimetype, long contentLength) {
+                DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
+                request.setMimeType(mimetype);
+                request.addRequestHeader("User-Agent", userAgent);
+                request.setDescription("Downloading file...");
+                request.setTitle(URLUtil.guessFileName(url, contentDisposition, mimetype));
+                request.allowScanningByMediaScanner();
+                request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+                request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, URLUtil.guessFileName(url, contentDisposition, mimetype));
+                DownloadManager dm = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+                dm.enqueue(request);
+            }
+        });
+
         // Load the initial URL
         myWeb.loadUrl("https://sonitasv.com/");
     }
@@ -79,6 +126,30 @@ public class MainActivity extends AppCompatActivity {
           myWeb.goBack();
         }else{
            super.onBackPressed();
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == FILE_CHOOSER_REQUEST_CODE) {
+            if (filePathCallback != null) {
+                Uri[] results = null;
+                if (resultCode == RESULT_OK && data != null) {
+                    String dataString = data.getDataString();
+                    if (dataString != null) {
+                        results = new Uri[]{Uri.parse(dataString)};
+                    } else if (data.getClipData() != null) {
+                        final int numSelectedFiles = data.getClipData().getItemCount();
+                        results = new Uri[numSelectedFiles];
+                        for (int i = 0; i < numSelectedFiles; i++) {
+                            results[i] = data.getClipData().getItemAt(i).getUri();
+                        }
+                    }
+                }
+                filePathCallback.onReceiveValue(results);
+                filePathCallback = null;
+            }
         }
     }
 }
