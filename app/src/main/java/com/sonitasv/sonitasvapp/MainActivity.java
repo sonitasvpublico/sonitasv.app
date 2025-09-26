@@ -18,6 +18,7 @@ import android.app.DownloadManager;
 import android.content.Context;
 import android.os.Environment;
 import android.webkit.URLUtil;
+import android.content.SharedPreferences;
 
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -36,6 +37,24 @@ public class MainActivity extends AppCompatActivity {
         myWeb = findViewById(R.id.myWeb);
         progressBar = findViewById(R.id.progressBar);
         myWeb.getSettings().setJavaScriptEnabled(true);
+        
+        // Optimización inteligente: Limpiar caché cuando sea necesario
+        SharedPreferences prefs = getSharedPreferences("app_prefs", MODE_PRIVATE);
+        long lastCacheClear = prefs.getLong("last_cache_clear", 0);
+        long currentTime = System.currentTimeMillis();
+        long sevenDaysInMillis = 7 * 24 * 60 * 60 * 1000L; // 7 días en milisegundos
+        
+        // Limpiar caché si es la primera vez o han pasado más de 7 días
+        if (lastCacheClear == 0 || (currentTime - lastCacheClear) > sevenDaysInMillis) {
+            myWeb.clearCache(true);
+            myWeb.clearHistory();
+            myWeb.clearFormData();
+            // Guardar la fecha de la última limpieza
+            prefs.edit().putLong("last_cache_clear", currentTime).apply();
+        }
+        
+        // Usar caché normal para mejor rendimiento
+        myWeb.getSettings().setCacheMode(android.webkit.WebSettings.LOAD_DEFAULT);
 
         // Set a custom WebViewClient to handle external links
         myWeb.setWebViewClient(new WebViewClient() {
